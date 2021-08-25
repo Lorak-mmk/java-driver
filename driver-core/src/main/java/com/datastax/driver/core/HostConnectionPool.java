@@ -691,7 +691,8 @@ class HostConnectionPool implements Connection.Owner {
           InetSocketAddress serverAddress = host.getEndPoint().resolve();
           int serverPort = serverAddress.getPort();
           ShardingInfo shardingInfo = host.getShardingInfo();
-          if (shardingInfo != null) {
+          if (shardingInfo != null
+              && manager.configuration().getProtocolOptions().isUseAdvancedShardAwareness()) {
             shardCount = shardingInfo.getShardsCount();
             boolean isSSLUsed =
                 null != manager.configuration().getProtocolOptions().getSSLOptions();
@@ -765,10 +766,12 @@ class HostConnectionPool implements Connection.Owner {
   }
 
   private int getAvailablePortForShard(int shardCount, int shardId, int maxAttempts) {
+    int lowPort = manager.configuration().getProtocolOptions().getLowLocalPort();
+    int highPort = manager.configuration().getProtocolOptions().getHighLocalPort();
     for (int i = 0; i < maxAttempts; i++) {
-      int port = 10000 + RAND.nextInt(50000 - shardCount);
+      int port = lowPort + RAND.nextInt(highPort - shardCount);
       port = port - port % shardCount + shardId;
-      if (port < 10000) {
+      if (port < lowPort) {
         port += shardCount;
       }
       if (SocketUtils.isTcpPortAvailable(port)) {

@@ -742,6 +742,9 @@ public class Cluster implements Closeable {
     private boolean allowBetaProtocolVersion = false;
     private boolean noCompact = false;
     private boolean isCloud = false;
+    private boolean useAdvancedShardAwareness = true;
+    private int localPortLow = ProtocolOptions.DEFAULT_LOCAL_PORT_LOW;
+    private int localPortHigh = ProtocolOptions.DEFAULT_LOCAL_PORT_HIGH;
 
     private Collection<Host.StateListener> listeners;
 
@@ -1467,6 +1470,22 @@ public class Cluster implements Closeable {
       return addCloudConfigToBuilder(cloudConfig);
     }
 
+    // TODO: docs
+    public Builder withoutAdvancedShardAwareness() {
+      this.useAdvancedShardAwareness = false;
+      return this;
+    }
+
+    // TODO: docs
+    public Builder withLocalPortRange(int low, int high) {
+      if (low < 1 || 65535 < low || 1 < high || 65535 < high) {
+          throw new IllegalArgumentException("Port numbers must be between 1 and 65535");
+      }
+      this.localPortLow = low;
+      this.localPortHigh = high;
+      return this;
+    }
+
     private Builder addCloudConfigToBuilder(CloudConfig cloudConfig) {
       Builder builder =
           withEndPointFactory(new SniEndPointFactory(cloudConfig.getProxyAddress()))
@@ -1513,7 +1532,10 @@ public class Cluster implements Closeable {
                   maxSchemaAgreementWaitSeconds,
                   sslOptions,
                   authProvider,
-                  noCompact)
+                  noCompact,
+                  useAdvancedShardAwareness,
+                  localPortLow,
+                  localPortHigh)
               .setCompression(compression);
 
       MetricsOptions metricsOptions = new MetricsOptions(metricsEnabled, jmxEnabled);
