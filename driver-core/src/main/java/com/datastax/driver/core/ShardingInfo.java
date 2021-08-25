@@ -26,24 +26,28 @@ public class ShardingInfo {
   private static final String SCYLLA_SHARDING_ALGORITHM = "SCYLLA_SHARDING_ALGORITHM";
   private static final String SCYLLA_SHARDING_IGNORE_MSB = "SCYLLA_SHARDING_IGNORE_MSB";
   private static final String SCYLLA_SHARD_AWARE_PORT = "SCYLLA_SHARD_AWARE_PORT";
+  private static final String SCYLLA_SHARD_AWARE_PORT_SSL = "SCYLLA_SHARD_AWARE_PORT_SSL";
 
   private final int shardsCount;
   private final String partitioner;
   private final String shardingAlgorithm;
   private final int shardingIgnoreMSB;
   private final int shardAwarePort;
+  private final int shardAwarePortSSL;
 
   private ShardingInfo(
       int shardsCount,
       String partitioner,
       String shardingAlgorithm,
       int shardingIgnoreMSB,
-      int shardAwarePort) {
+      int shardAwarePort,
+      int shardAwarePortSSL) {
     this.shardsCount = shardsCount;
     this.partitioner = partitioner;
     this.shardingAlgorithm = shardingAlgorithm;
     this.shardingIgnoreMSB = shardingIgnoreMSB;
     this.shardAwarePort = shardAwarePort;
+    this.shardAwarePortSSL = shardAwarePortSSL;
   }
 
   public int getShardsCount() {
@@ -62,8 +66,8 @@ public class ShardingInfo {
     return (int) (sum >>> 32);
   }
 
-  public int getShardAwarePort() {
-    return shardAwarePort;
+  public int getShardAwarePort(boolean isSSLUsed) {
+    return isSSLUsed ? shardAwarePortSSL : shardAwarePort;
   }
 
   public static class ConnectionShardingInfo {
@@ -83,6 +87,7 @@ public class ShardingInfo {
     String shardingAlgorithm = parseString(params, SCYLLA_SHARDING_ALGORITHM);
     Integer shardingIgnoreMSB = parseInt(params, SCYLLA_SHARDING_IGNORE_MSB);
     Integer shardAwarePort = parseInt(params, SCYLLA_SHARD_AWARE_PORT);
+    Integer shardAwarePortSSL = parseInt(params, SCYLLA_SHARD_AWARE_PORT_SSL);
     if (shardId == null
         || shardsCount == null
         || partitioner == null
@@ -95,10 +100,20 @@ public class ShardingInfo {
     if (shardAwarePort == null) {
       shardAwarePort = 0;
     }
+
+    if (shardAwarePortSSL == null) {
+      shardAwarePortSSL = 0;
+    }
+
     return new ConnectionShardingInfo(
         shardId,
         new ShardingInfo(
-            shardsCount, partitioner, shardingAlgorithm, shardingIgnoreMSB, shardAwarePort));
+            shardsCount,
+            partitioner,
+            shardingAlgorithm,
+            shardingIgnoreMSB,
+            shardAwarePort,
+            shardAwarePortSSL));
   }
 
   private static String parseString(Map<String, List<String>> params, String key) {
