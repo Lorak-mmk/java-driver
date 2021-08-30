@@ -68,12 +68,15 @@ import io.netty.util.TimerTask;
 import io.netty.util.concurrent.GlobalEventExecutor;
 import java.lang.ref.WeakReference;
 import java.net.InetSocketAddress;
+import java.security.InvalidParameterException;
+import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
@@ -94,6 +97,7 @@ import org.slf4j.LoggerFactory;
 class Connection {
 
   private static final Logger logger = LoggerFactory.getLogger(Connection.class);
+  private static final Random RAND = new Random();
   private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
   private static final boolean DISABLE_COALESCING =
@@ -166,10 +170,10 @@ class Connection {
   }
 
   ListenableFuture<Void> initAsync() {
-    return initAsync(0, 0);
+    return initAsync(-1, 0, null);
   }
 
-  ListenableFuture<Void> initAsync(int localPort, int serverPort) {
+  ListenableFuture<Void> initAsync(int shardId, int serverPort, HostConnectionPool pool) {
     if (factory.isShutdown)
       return Futures.immediateFailedFuture(
           new ConnectionException(endPoint, "Connection factory is shut down"));
@@ -201,7 +205,37 @@ class Connection {
               ? endPoint.resolve()
               : new InetSocketAddress(endPoint.resolve().getAddress(), serverPort);
 
-      ChannelFuture future = bootstrap.connect(serverAddress, new InetSocketAddress(localPort));
+      ShardingInfo shardingInfo = host.getShardingInfo();
+      if ((shardingInfo == null || pool == null) && shardId != -1) {
+        throw new InvalidParameterException(
+            MessageFormat.format(
+                "Requested connection to shard {} of host {}:{}, but sharding info or pool is absent",
+                shardId,
+                serverAddress.getAddress().getHostAddress(),
+                serverPort));
+      }
+
+      ChannelFuture future = null;
+
+      if (shardId == -1) {
+        future = bootstrap.connect(serverAddress);
+      } else {
+        int lowPort = pool.manager.configuration().getProtocolOptions().getLowLocalPort();
+        int highPort = pool.manager.configuration().getProtocolOptions().getHighLocalPort();
+        // TODO: make max tries a parameterr
+        for (int i = 0; i < 100; i++) {
+          try {
+            int localPort =
+                getRandomPortForShard(shardingInfo.getShardsCount(), shardId, lowPort, highPort);
+            future = bootstrap.connect(serverAddress, new InetSocketAddress(localPort));
+            break;
+          } catch (RuntimeException e) {
+            if (i == 99) { // TODO: parametrize
+              throw e;
+            }
+          }
+        }
+      }
 
       writer.incrementAndGet();
       future.addListener(
@@ -314,6 +348,15 @@ class Connection {
         initExecutor);
 
     return initFuture;
+  }
+
+  private int getRandomPortForShard(int shardCount, int shardId, int lowPort, int highPort) {
+    int port = lowPort + RAND.nextInt(highPort - shardCount);
+    port = port - port % shardCount + shardId;
+    if (port < lowPort) {
+      port += shardCount;
+    }
+    return port;
   }
 
   private static String extractMessage(Throwable t) {
@@ -1118,16 +1161,16 @@ class Connection {
     Connection open(HostConnectionPool pool)
         throws ConnectionException, InterruptedException, UnsupportedProtocolVersionException,
             ClusterNameMismatchException {
-      return open(pool, 0, 0);
+      return open(pool, -1, 0);
     }
 
-    Connection open(HostConnectionPool pool, int localPort, int serverPort)
+    Connection open(HostConnectionPool pool, int shardId, int serverPort)
         throws ConnectionException, InterruptedException, UnsupportedProtocolVersionException,
             ClusterNameMismatchException {
       pool.host.convictionPolicy.signalConnectionsOpening(1);
       Connection connection = new Connection(buildConnectionName(pool.host), pool.host, this, pool);
       try {
-        connection.initAsync(localPort, serverPort).get();
+        connection.initAsync(shardId, serverPort, pool).get();
         return connection;
       } catch (ExecutionException e) {
         throw launderAsyncInitException(e);

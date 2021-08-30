@@ -1479,7 +1479,7 @@ public class Cluster implements Closeable {
     // TODO: docs
     public Builder withLocalPortRange(int low, int high) {
       if (low < 1 || 65535 < low || 1 < high || 65535 < high) {
-          throw new IllegalArgumentException("Port numbers must be between 1 and 65535");
+        throw new IllegalArgumentException("Port numbers must be between 1 and 65535");
       }
       this.localPortLow = low;
       this.localPortHigh = high;
