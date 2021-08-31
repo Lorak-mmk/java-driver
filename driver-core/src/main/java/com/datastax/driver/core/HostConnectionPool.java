@@ -91,6 +91,8 @@ class HostConnectionPool implements Connection.Owner {
 
   private final AtomicReference<CloseFuture> closeFuture = new AtomicReference<CloseFuture>();
 
+  private long advShardAwarenessBlockedUntil = 0;
+
   private enum Phase {
     INITIALIZING,
     READY,
@@ -164,7 +166,15 @@ class HostConnectionPool implements Connection.Owner {
       return false;
     }
 
+    if (System.currentTimeMillis() < advShardAwarenessBlockedUntil) {
+      return false;
+    }
+
     return true;
+  }
+
+  public void tempBlockAdvShardAwareness(long millis) {
+    advShardAwarenessBlockedUntil = Math.max(System.currentTimeMillis() + millis, advShardAwarenessBlockedUntil);
   }
 
   private final ConnectionTasksSharedState connectionTasksSharedState =

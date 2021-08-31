@@ -105,6 +105,10 @@ class Connection {
   private static final int FLUSHER_SCHEDULE_PERIOD_NS =
       SystemProperties.getInt("com.datastax.driver.FLUSHER_SCHEDULE_PERIOD_NS", 10000);
 
+  private static final long ADV_SHARED_AWARENESS_BLOCK_ON_NAT = 60 * 60 * 1000;
+
+  private static final long ADV_SHARED_AWARENESS_BLOCK_ON_TIMEOUT = 5 * 60 * 1000;
+
   enum State {
     OPEN,
     TRASHED,
@@ -120,6 +124,9 @@ class Connection {
   final EndPoint endPoint;
   private final String name;
   private volatile Integer shardId = null;
+
+  private HostConnectionPool pool = null;
+  private int requestedShardId = -1;
 
   @VisibleForTesting volatile Channel channel;
   private final Factory factory;
@@ -177,6 +184,9 @@ class Connection {
     if (factory.isShutdown)
       return Futures.immediateFailedFuture(
           new ConnectionException(endPoint, "Connection factory is shut down"));
+
+    this.requestedShardId = shardId;
+    this.pool = pool;
 
     ProtocolVersion protocolVersion =
         factory.protocolVersion == null
@@ -395,6 +405,10 @@ class Connection {
             if (sharding != null) {
               host.setShardingInfo(sharding.shardingInfo);
               Connection.this.shardId = sharding.shardId;
+              if (Connection.this.requestedShardId != -1 && Connection.this.requestedShardId != sharding.shardId) {
+                logger.warn("Advanced shard awareness: requested connection to shard %d, but connected to %d. Is there a NAT between client and server?");
+                Connection.this.pool.tempBlockAdvShardAwareness(ADV_SHARED_AWARENESS_BLOCK_ON_NAT);
+              }
             } else {
               host.setShardingInfo(null);
               Connection.this.shardId = 0;
