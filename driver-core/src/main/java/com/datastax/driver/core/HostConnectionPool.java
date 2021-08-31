@@ -150,6 +150,23 @@ class HostConnectionPool implements Connection.Owner {
     }
   }
 
+  private boolean canUseAdvancedShardAwareness() {
+    ShardingInfo shardingInfo = host.getShardingInfo();
+    if (shardingInfo == null) {
+      return false;
+    }
+    if (!manager.configuration().getProtocolOptions().isUseAdvancedShardAwareness()) {
+      return false;
+    }
+
+    boolean isSSLUsed = null != manager.configuration().getProtocolOptions().getSSLOptions();
+    if (shardingInfo.getShardAwarePort(isSSLUsed) == 0) {
+      return false;
+    }
+
+    return true;
+  }
+
   private final ConnectionTasksSharedState connectionTasksSharedState =
       new ConnectionTasksSharedState();
 
@@ -256,34 +273,37 @@ class HostConnectionPool implements Connection.Owner {
 
     List<Connection> newConnections = manager.connectionFactory().newConnections(this, toCreate);
     connections.addAll(newConnections);
-    ShardingInfo shardingInfo = host.getShardingInfo();
-    boolean isAdvShardAwarenessEnabled =
-        shardingInfo != null
-            && manager.configuration().getProtocolOptions().isUseAdvancedShardAwareness();
-    int serverPort = host.getEndPoint().resolve().getPort();
-    boolean isSSLUsed = null != manager.configuration().getProtocolOptions().getSSLOptions();
-    if (shardingInfo.getShardAwarePort(isSSLUsed) != 0) {
-      serverPort = shardingInfo.getShardAwarePort(isSSLUsed);
-    }
 
-    int shardId = 0;
-    int shardConnectionIndex = 0;
-    for (Connection connection : newConnections) {
-      if (shardConnectionIndex == connectionsPerShard) {
-        shardConnectionIndex = 0;
-        shardId++;
-      }
-      if (shardId == reusedConnection.shardId() && shardConnectionIndex == 0) {
-        shardConnectionIndex++;
+    if (canUseAdvancedShardAwareness()) {
+      ShardingInfo shardingInfo = host.getShardingInfo();
+      boolean isSSLUsed = null != manager.configuration().getProtocolOptions().getSSLOptions();
+      int serverPort = shardingInfo.getShardAwarePort(isSSLUsed);
+
+      int shardId = 0;
+      int shardConnectionIndex = 0;
+      for (Connection connection : newConnections) {
         if (shardConnectionIndex == connectionsPerShard) {
           shardConnectionIndex = 0;
           shardId++;
         }
+        if (shardId == reusedConnection.shardId() && shardConnectionIndex == 0) {
+          shardConnectionIndex++;
+          if (shardConnectionIndex == connectionsPerShard) {
+            shardConnectionIndex = 0;
+            shardId++;
+          }
+        }
+
+        ListenableFuture<Void> connectionFuture = connection.initAsync(shardId, serverPort, this);
+        connectionFutures.add(handleErrors(connectionFuture, initExecutor));
+
+        shardConnectionIndex++;
       }
-      ListenableFuture<Void> connectionFuture =
-          connection.initAsync(isAdvShardAwarenessEnabled ? shardId : -1, serverPort, this);
-      connectionFutures.add(handleErrors(connectionFuture, initExecutor));
-      shardConnectionIndex++;
+    } else {
+      for (Connection connection : newConnections) {
+        ListenableFuture<Void> connectionFuture = connection.initAsync();
+        connectionFutures.add(handleErrors(connectionFuture, initExecutor));
+      }
     }
 
     final SettableFuture<Void> initFuture = SettableFuture.create();
@@ -710,20 +730,15 @@ class HostConnectionPool implements Connection.Owner {
         newConnection = sharedState.getConnection(shardId);
         if (newConnection == null) {
           InetSocketAddress serverAddress = host.getEndPoint().resolve();
-          int serverPort = serverAddress.getPort();
-          ShardingInfo shardingInfo = host.getShardingInfo();
-          if (shardingInfo != null
-              && manager.configuration().getProtocolOptions().isUseAdvancedShardAwareness()) {
+          int serverPort;
+          if (canUseAdvancedShardAwareness()) {
+            ShardingInfo shardingInfo = host.getShardingInfo();
             boolean isSSLUsed =
                 null != manager.configuration().getProtocolOptions().getSSLOptions();
-            if (shardingInfo.getShardAwarePort(isSSLUsed) != 0) {
-              serverPort = shardingInfo.getShardAwarePort(isSSLUsed);
-            } else {
-              // Unknown shard-aware port - shard awareness unsupported by server?
-              shardId = -1;
-            }
+            serverPort = shardingInfo.getShardAwarePort(isSSLUsed);
           } else {
             shardId = -1;
+            serverPort = serverAddress.getPort();
           }
 
           logger.debug(
