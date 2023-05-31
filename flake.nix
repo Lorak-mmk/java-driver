@@ -5,6 +5,7 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
+
   outputs = { self, nixpkgs, flake-utils, scylla_ccm }:
     let
       ld_library_path = pkgs: pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.libc pkgs.libxcrypt-legacy ];
@@ -26,12 +27,29 @@
             export MAVEN_SKIP_RC=1
             exec -a mvn ${mvn}/bin/mvn "$@"
           '';
+      jdk_overlay = final: prev: with final; {
+
+        java-service-wrapper = prev.java-service-wrapper.override {
+          buildPhase = ''
+            runHook preBuild
+
+            export ANT_HOME=${ant}
+            export JAVA_HOME=${jdk}
+            export JAVA_TOOL_OPTIONS=-Djava.home=$JAVA_HOME
+            export CLASSPATH=${jdk}/lib/openjdk/lib/tools.jar
+
+            ${if stdenv.isi686 then "./build32.sh" else "./build64.sh"}
+
+            runHook postBuild
+          '';
+        };
+      };
     in
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ scylla_ccm.overlays.default ]; 
+          overlays = [ scylla_ccm.overlays.default jdk_overlay ]; 
         };
         jdk8 = jdk_with_library_path pkgs.jdk8_headless "jdk8_wrapped" pkgs;
         jdk11 = jdk_with_library_path pkgs.jdk11_headless "jdk11_wrapped" pkgs;
