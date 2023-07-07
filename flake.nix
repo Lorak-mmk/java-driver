@@ -54,3 +54,26 @@
       }
     );
 }
+
+/*
+mvn8 verify -DskipTests
+mvn8 test -Punit
+mvn8 test -Pshort -Dscylla.version=3.11.15
+mvn8 release:perform
+
+
+mvn11 verify -DskipTests
+mvn11 test -Punit
+mvn11 test -Pshort -Dscylla.version=3.11.15
+mvn11 release:perform
+*/
+
+# mvn verify -DskipTests
+# mvn test -Punit
+# mvn test -Pshort
+# mvn test -Plong
+# mvn release:perform
+# Scylla: ["2022.1.7", "5.3.0-rc0", "5.1.13", "2023.1.0-rc7", "5.2.4", "2022.2.9"]
+# Cassandra: ["3.11.15"]
+# -Dscylla.version=
+# -Dcassandra.version=
