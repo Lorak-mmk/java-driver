@@ -56,15 +56,15 @@
 }
 
 /*
-mvn8 verify -DskipTests
-mvn8 test -Punit
-mvn8 test -Pshort -Dscylla.version=3.11.15
+mvn8 clean verify -DskipTests
+mvn8 clean test -Punit
+mvn8 clean test -Pshort -Dscylla.version=5.2.4
 mvn8 release:perform
 
 
-mvn11 verify -DskipTests
-mvn11 test -Punit
-mvn11 test -Pshort -Dscylla.version=3.11.15
+mvn11 clean verify -DskipTests
+mvn11 clean test -Punit
+mvn11 clean test -Pshort -Dscylla.version=5.2.4
 mvn11 release:perform
 */
 
