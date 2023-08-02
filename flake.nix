@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "nixpkgs";
-    scylla_ccm.url = "github:Lorak-mmk/scylla-ccm/nix";
+    scylla_ccm.url = "github:scylladb/scylla-ccm/next";
     flake-utils.url = "github:numtide/flake-utils";
   };
 

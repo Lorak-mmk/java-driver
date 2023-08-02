@@ -77,16 +77,16 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1688568850,
-        "narHash": "sha256-JS3kSJReOnR6SUMX2IvbXdZn+FEKKrJ+DSiNEp4lPj4=",
-        "owner": "Lorak-mmk",
+        "lastModified": 1690966414,
+        "narHash": "sha256-S5eb8+E3aSuBlEB4/iVclO8wdRraQolle39tmZ/e0lQ=",
+        "owner": "scylladb",
         "repo": "scylla-ccm",
-        "rev": "875debbc9d8d16c1f4eaed7ebff1ffbf9d46c5d5",
+        "rev": "1d2bf06d125db037386c9585100ff1724e3f22aa",
         "type": "github"
       },
       "original": {
-        "owner": "Lorak-mmk",
-        "ref": "nix",
+        "owner": "scylladb",
+        "ref": "next",
         "repo": "scylla-ccm",
         "type": "github"
       }
